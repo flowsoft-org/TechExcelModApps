@@ -149,7 +149,7 @@ jobs:
   
     - name: Create Azure AI Search Service
       run: |
-        az search service create --name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --sku Standard --location $AZURE_REGION --identity-type SystemAssigned --semantic-search standard
+        az search service create --name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --sku Standard --location $AZURE_REGION --identity-type SystemAssigned
         AZURE_AI_SEARCH_ENDPOINT=$(az search service show --name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --query endpoint --output tsv)
         echo "AZURE_AI_SEARCH_ENDPOINT=$AZURE_AI_SEARCH_ENDPOINT" >> $GITHUB_ENV
         AZURE_AI_SEARCH_API_KEY=$(az search admin-key show --service-name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --query primaryKey --output tsv)
