@@ -10,7 +10,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
-      
+
     env:
       AZURE_REGION: "swedencentral"
       RESOURCE_GROUP: "rg-techexcelai"
@@ -80,6 +80,7 @@ jobs:
           --admin-user $POSTGRES_ADMIN_USER \
           --admin-password $POSTGRES_ADMIN_PASSWORD \
           --location $AZURE_REGION \
+          --tier Burstable \
           --sku-name Standard_B1ms \
           --storage-size 32 \
           --version 13
