@@ -74,7 +74,7 @@ jobs:
 
     - name: Create PostgreSQL server
       run: |
-        server_exists=$(az postgres server show --resource-group $RESOURCE_GROUP --name $SERVER_NAME --query "name" --output tsv 2>/dev/null)
+        server_exists=$(az postgres server show --resource-group $RESOURCE_GROUP --name $POSTGRES_SERVER_NAME --query "name" --output tsv 2>/dev/null)
         if [ -z "$server_exists" ]; then
           az postgres flexible-server create \
             --resource-group $RESOURCE_GROUP \
@@ -85,7 +85,7 @@ jobs:
             --tier Burstable \
             --sku-name Standard_B1ms \
             --storage-size 32 \
-            --yes --if-not-exists
+            --yes
         fi
 
     - name: Configure PostgreSQL firewall rules
