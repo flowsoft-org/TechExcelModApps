@@ -172,6 +172,9 @@ jobs:
     #       'container': { 'name': '$STORAGE_CONTAINER_NAME' }
     #     }" --target-index $AZURE_SEARCH_INDEX_NAME
 
+    - name: Deploy Azure Container Environment
+      run: |
+        az containerapp env create --name $CONTAINER_ENV --resource-group $RESOURCE_GROUP --location $AZURE_REGION
 
     - name: Deploy promptflow container
       run: |
