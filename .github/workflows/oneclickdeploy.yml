@@ -74,7 +74,7 @@ jobs:
 
     - name: Create PostgreSQL server
       run: |
-        server_exists=$(az postgres server show --resource-group $RESOURCE_GROUP --name $POSTGRES_SERVER_NAME --query "name" --output tsv 2>/dev/null)
+        server_exists=$(az postgres flexible-server show --resource-group $RESOURCE_GROUP --name $POSTGRES_SERVER_NAME --query "name" --output tsv 2>/dev/null)
         if [ -z "$server_exists" ]; then
           az postgres flexible-server create \
             --resource-group $RESOURCE_GROUP \
