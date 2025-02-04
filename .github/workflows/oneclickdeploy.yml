@@ -83,7 +83,7 @@ jobs:
           --tier Burstable \
           --sku-name Standard_B1ms \
           --storage-size 32 \
-          --yes
+          --yes --if-not-exists
 
     - name: Configure PostgreSQL firewall rules
       run: |
