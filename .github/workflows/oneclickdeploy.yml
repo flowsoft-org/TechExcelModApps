@@ -133,15 +133,15 @@ jobs:
 
     - name: Deploy ADA Embedding Model
       run: |
-        az openai deployment create --resource-group $RESOURCE_GROUP \
-        --service-name $AZURE_OPENAI_SERVICE_NAME --name $AZURE_OPENAI_DEPLOYMENT_NAME_EMBEDDING \
-        --model ada --model-version text-embedding-ada-002
+        az cognitiveservices account deployment create --resource-group $RESOURCE_GROUP \
+        --name $AZURE_OPENAI_SERVICE_NAME --deployment-name $AZURE_OPENAI_DEPLOYMENT_NAME_EMBEDDING \
+        --model-name text-embedding-ada-002 --model-version 2 --model-format OpenAI
   
-    - name: Deploy GPT-4 Model
+    - name: Deploy GPT-3.5 Turbo Model
       run: |
-        az openai deployment create --resource-group $RESOURCE_GROUP \
-        --service-name $AZURE_OPENAI_SERVICE_NAME --name $AZURE_OPENAI_DEPLOYMENT_NAME_GPT4 \
-        --model gpt-4 --model-version gpt-4
+        az cognitiveservices account deployment create --resource-group $RESOURCE_GROUP \
+        --name $AZURE_OPENAI_SERVICE_NAME --deployment-name $AZURE_OPENAI_DEPLOYMENT_NAME_GPT4 \
+        --model-name gpt-35-turbo --model-version 0125 --model-format OpenAI
   
     - name: Create Azure AI Search Service
       run: |
