@@ -51,7 +51,7 @@ jobs:
 
     - name: Create Azure Container Registry
       run: |
-        az acr create --resource-group $RESOURCE_GROUP --name $ACR_NAME --sku Basic --location $AZURE_REGION
+        az acr create --resource-group $RESOURCE_GROUP --name $ACR_NAME --sku Standard --location $AZURE_REGION
         az acr login --name $ACR_NAME
         az acr update --name $ACR_NAME --anonymous-pull-enabled true
 
