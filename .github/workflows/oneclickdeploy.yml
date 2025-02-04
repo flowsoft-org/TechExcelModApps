@@ -53,6 +53,7 @@ jobs:
       run: |
         az acr create --resource-group $RESOURCE_GROUP --name $ACR_NAME --sku Basic --location $AZURE_REGION
         az acr login --name $ACR_NAME
+        az acr update --name $ACR_NAME --anonymous-pull-enabled true
 
     - name: Build and push front-end image
       run: |
@@ -127,7 +128,8 @@ jobs:
     - name: Create Azure OpenAI Service
       run: |
         az cognitiveservices account create --name $AZURE_OPENAI_SERVICE_NAME \
-        --resource-group $RESOURCE_GROUP --kind OpenAI --sku S0 --location $AZURE_REGION
+        --resource-group $RESOURCE_GROUP --kind OpenAI --sku S0 --location $AZURE_REGION \
+        --custom-domain $AZURE_OPENAI_SERVICE_NAME
         AZURE_OPENAI_ENDPOINT=$(az cognitiveservices account show --name $AZURE_OPENAI_SERVICE_NAME --resource-group $RESOURCE_GROUP --query endpoint --output tsv)
         echo "AZURE_OPENAI_ENDPOINT=$AZURE_OPENAI_ENDPOINT" >> $GITHUB_ENV
         AZURE_OPENAI_API_KEY=$(az cognitiveservices account keys list --name $AZURE_OPENAI_SERVICE_NAME --resource-group $RESOURCE_GROUP --query key1 --output tsv)
