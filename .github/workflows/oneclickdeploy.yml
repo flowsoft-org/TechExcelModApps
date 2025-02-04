@@ -27,11 +27,11 @@ jobs:
       POSTGRES_DB_NAME: "pycontosohotel"
       POSTGRES_ADMIN_USER: "contosoadmin"
       POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
-      AZURE_SEARCH_SERVICE_NAME: "contososrch$(date +%s)"
+      AZURE_SEARCH_SERVICE_NAME: "fwtechexcelaisrch"
       AZURE_SEARCH_INDEX_NAME: "brochures-vector"
-      STORAGE_ACCOUNT_NAME: "contosostorage$(date +%s)"
+      STORAGE_ACCOUNT_NAME: "fwtechexcelaistr"
       STORAGE_CONTAINER_NAME: "brochures"
-      AZURE_OPENAI_SERVICE_NAME: "fwtechexcelai-openai"
+      AZURE_OPENAI_SERVICE_NAME: "fwtechexcelaiaoai"
       AZURE_OPENAI_DEPLOYMENT_NAME_EMBEDDING: "ada-embedding"
       AZURE_OPENAI_DEPLOYMENT_NAME_GPT4: "gpt4"
 
