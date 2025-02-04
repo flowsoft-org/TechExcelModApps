@@ -1,0 +1,179 @@
+name: Deploy Contoso Hotel App
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AZURE_REGION: "swedencentral"
+      RESOURCE_GROUP: "rg-techexcelai"
+      ACR_NAME: "fwtechexcelai"
+      CONTAINER_ENV: "fwcontosohotel"
+      FRONTEND_IMAGE: "contosohotel-frontend"
+      BACKEND_IMAGE: "contosohotel-backend"
+      PROMPTFLOW_IMAGE: "contosohotel-promptflow"
+      FRONTEND_PORT: 8000
+      BACKEND_PORT: 8000
+      PROMPTFLOW_PORT: 8080
+      POSTGRES_PORT: 5432
+      POSTGRES_SERVER_NAME: "contosohotel-postgres"
+      POSTGRES_DB_NAME: "pycontosohotel"
+      POSTGRES_ADMIN_USER: "contosoadmin"
+      POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      AZURE_SEARCH_SERVICE_NAME: "contososrch$(date +%s)"
+      AZURE_SEARCH_INDEX_NAME: "brochures-vector"
+      STORAGE_ACCOUNT_NAME: "contosostorage$(date +%s)"
+      STORAGE_CONTAINER_NAME: "brochures"
+      AZURE_OPENAI_SERVICE_NAME: "fwtechexcelai-openai"
+      AZURE_OPENAI_DEPLOYMENT_NAME_EMBEDDING: "ada-embedding"
+      AZURE_OPENAI_DEPLOYMENT_NAME_GPT4: "gpt4"
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Login to Azure using OIDC
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_TECH_EXCEL_AI_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Create Resource Group
+      run: az group create --name $RESOURCE_GROUP --location $AZURE_REGION
+
+    - name: Create Azure Container Registry
+      run: |
+        az acr create --resource-group $RESOURCE_GROUP --name $ACR_NAME --sku Basic --location $AZURE_REGION
+        az acr login --name $ACR_NAME
+
+    - name: Build and push front-end image
+      run: |
+        cd ModernizedContosoHotel/FrontEnd
+        docker build -t $ACR_NAME.azurecr.io/$FRONTEND_IMAGE:v1.0.0 .
+        docker push $ACR_NAME.azurecr.io/$FRONTEND_IMAGE:v1.0.0
+
+    - name: Build and push back-end image
+      run: |
+        cd ModernizedContosoHotel/BackEnd
+        docker build -t $ACR_NAME.azurecr.io/$BACKEND_IMAGE:v1.0.0 .
+        docker push $ACR_NAME.azurecr.io/$BACKEND_IMAGE:v1.0.0
+
+    - name: Build and push promptflow image
+      run: |
+        cd TechExcel-Modernize-applications-to-be-AI-ready/Assets/docker-dist
+        docker build -t $ACR_NAME.azurecr.io/$PROMPTFLOW_IMAGE:v1.0.0 .
+        docker push $ACR_NAME.azurecr.io/$PROMPTFLOW_IMAGE:v1.0.0
+
+    - name: Create PostgreSQL server
+      run: |
+        az postgres flexible-server create \
+          --resource-group $RESOURCE_GROUP \
+          --name $POSTGRES_SERVER_NAME \
+          --admin-user $POSTGRES_ADMIN_USER \
+          --admin-password $POSTGRES_ADMIN_PASSWORD \
+          --location $AZURE_REGION \
+          --sku-name Standard_B1ms \
+          --storage-size 32 \
+          --version 13
+
+    - name: Configure PostgreSQL firewall rules
+      run: |
+        az postgres flexible-server firewall-rule create \
+          --resource-group $RESOURCE_GROUP \
+          --name $POSTGRES_SERVER_NAME \
+          --rule-name AllowAllAzureIPs \
+          --start-ip-address 0.0.0.0 \
+          --end-ip-address 255.255.255.255
+
+    - name: Create PostgreSQL database
+      run: |
+        az postgres flexible-server db create \
+          --resource-group $RESOURCE_GROUP \
+          --server-name $POSTGRES_SERVER_NAME \
+          --database-name $POSTGRES_DB_NAME
+
+    - name: Get PostgreSQL connection string
+      id: get-postgres-connection-string
+      run: |
+        POSTGRES_CONNECTION_STRING=$(az postgres flexible-server show-connection-string \
+          --server-name $POSTGRES_SERVER_NAME \
+          --database-name $POSTGRES_DB_NAME \
+          --admin-user $POSTGRES_ADMIN_USER \
+          --admin-password $POSTGRES_ADMIN_PASSWORD \
+          --output tsv)
+        echo "POSTGRES_CONNECTION_STRING=$POSTGRES_CONNECTION_STRING" >> $GITHUB_ENV
+
+    - name: Create Azure Storage Account
+      run: |
+        az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP --location $AZURE_REGION --sku Standard_LRS
+        az storage container create --name $STORAGE_CONTAINER_NAME --account-name $STORAGE_ACCOUNT_NAME
+
+    - name: Upload PDF files to Azure Storage
+      run: |
+        az storage blob upload-batch --account-name $STORAGE_ACCOUNT_NAME --destination $STORAGE_CONTAINER_NAME --source "TechExcel-Modernize-applications-to-be-AI-ready/Assets/PDFs" --pattern "*.pdf"
+
+    - name: Create Azure OpenAI Service
+      run: |
+        az cognitiveservices account create --name $AZURE_OPENAI_SERVICE_NAME \
+        --resource-group $RESOURCE_GROUP --kind OpenAI --sku S0 --location $AZURE_REGION
+        AZURE_OPENAI_ENDPOINT=$(az cognitiveservices account show --name $AZURE_OPENAI_SERVICE_NAME --resource-group $RESOURCE_GROUP --query endpoint --output tsv)
+        echo "AZURE_OPENAI_ENDPOINT=$AZURE_OPENAI_ENDPOINT" >> $GITHUB_ENV
+
+    - name: Deploy ADA Embedding Model
+      run: |
+        az openai deployment create --resource-group $RESOURCE_GROUP \
+        --service-name $AZURE_OPENAI_SERVICE_NAME --name $AZURE_OPENAI_DEPLOYMENT_NAME_EMBEDDING \
+        --model ada --model-version text-embedding-ada-002
+  
+    - name: Deploy GPT-4 Model
+      run: |
+        az openai deployment create --resource-group $RESOURCE_GROUP \
+        --service-name $AZURE_OPENAI_SERVICE_NAME --name $AZURE_OPENAI_DEPLOYMENT_NAME_GPT4 \
+        --model gpt-4 --model-version gpt-4
+  
+    - name: Create Azure AI Search Service
+      run: |
+        az search service create --name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --sku Basic --location $AZURE_REGION --identity-type SystemAssigned
+
+    - name: Create Azure AI Search Index
+      run: |
+        az search index create --service-name $AZURE_SEARCH_SERVICE_NAME --name $AZURE_SEARCH_INDEX_NAME --fields "[
+          { 'name': 'content', 'type': 'Edm.String', 'searchable': true },
+          { 'name': 'metadata_storage_path', 'type': 'Edm.String', 'key': true, 'filterable': true, 'sortable': true }
+        ]"
+
+    - name: Create Azure AI Search Indexer
+      run: |
+        az search indexer create --service-name $AZURE_SEARCH_SERVICE_NAME --name "pdf-indexer" --data-source "{
+          'name': 'pdfs',
+          'type': 'azureblob',
+          'credentials': { 'connectionString': 'DefaultEndpointsProtocol=https;AccountName=$STORAGE_ACCOUNT_NAME;AccountKey=$(az storage account keys list --resource-group $RESOURCE_GROUP --account-name $STORAGE_ACCOUNT_NAME --query [0].value --output tsv);EndpointSuffix=core.windows.net' },
+          'container': { 'name': '$STORAGE_CONTAINER_NAME' }
+        }" --target-index $AZURE_SEARCH_INDEX_NAME
+
+    - name: Deploy front-end container
+      run: |
+        az containerapp create --name frontend --resource-group $RESOURCE_GROUP --environment $CONTAINER_ENV --image $ACR_NAME.azurecr.io/$FRONTEND_IMAGE:v1.0.0 --target-port $FRONTEND_PORT --ingress external --env-vars API_BASEURL=$BACKEND_URL
+
+    - name: Deploy back-end container
+      run: |
+        az containerapp create --name backend --resource-group $RESOURCE_GROUP --environment $CONTAINER_ENV --image $ACR_NAME.azurecr.io/$BACKEND_IMAGE:v1.0.0 --target-port $BACKEND_PORT --ingress external --env-vars POSTGRES_CONNECTION_STRING=$POSTGRES_CONNECTION_STRING
+
+    - name: Deploy promptflow container
+      run: |
+        az containerapp create --name promptflow --resource-group $RESOURCE_GROUP \
+        --environment $CONTAINER_ENV --image $ACR_NAME.azurecr.io/$PROMPTFLOW_IMAGE:v1.0.0 \
+        --target-port $PROMPTFLOW_PORT --ingress external \
+        --env-vars AZURE_OPENAI_ENDPOINT=$AZURE_OPENAI_ENDPOINT \
+        AZURE_OPENAI_API_KEY=$AZURE_OPENAI_API_KEY \
+        AZURE_AI_SEARCH_ENDPOINT=$AZURE_AI_SEARCH_ENDPOINT \
+        AZURE_AI_SEARCH_API_KEY=$AZURE_AI_SEARCH_API_KEY \
+        PGHOST=$POSTGRES_SERVER_NAME \
+        PGPORT=$POSTGRES_PORT \
+        PGUSER=$POSTGRES_ADMIN_USER \
+        PGDATABASE=$POSTGRES_DB_NAME \
+        PGPASSWORD=$POSTGRES_ADMIN_PASSWORD
