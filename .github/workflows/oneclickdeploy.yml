@@ -82,8 +82,7 @@ jobs:
           --location $AZURE_REGION \
           --tier Burstable \
           --sku-name Standard_B1ms \
-          --storage-size 32 \
-          --version 13
+          --storage-size 32
 
     - name: Configure PostgreSQL firewall rules
       run: |
