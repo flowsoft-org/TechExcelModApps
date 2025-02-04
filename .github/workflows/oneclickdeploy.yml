@@ -34,7 +34,7 @@ jobs:
       AZURE_OPENAI_SERVICE_NAME: "fwtechexcelaiaoai"
       AZURE_OPENAI_DEPLOYMENT_NAME_EMBEDDING: "ada-embedding"
       AZURE_OPENAI_DEPLOYMENT_NAME_GPT4: "gpt4"
-
+      
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -108,12 +108,7 @@ jobs:
     - name: Get PostgreSQL connection string
       id: get-postgres-connection-string
       run: |
-        POSTGRES_CONNECTION_STRING=$(az postgres flexible-server show-connection-string \
-          --server-name $POSTGRES_SERVER_NAME \
-          --database-name $POSTGRES_DB_NAME \
-          --admin-user $POSTGRES_ADMIN_USER \
-          --admin-password $POSTGRES_ADMIN_PASSWORD \
-          --output tsv)
+        POSTGRES_CONNECTION_STRING="user=$POSTGRES_ADMIN_USER;password=$POSTGRES_ADMIN_PASSWORD;host=$POSTGRES_SERVER_NAME.postgres.database.azure.com;port=5432;database=$POSTGRES_DB_NAME;"
         echo "POSTGRES_CONNECTION_STRING=$POSTGRES_CONNECTION_STRING" >> $GITHUB_ENV
 
     - name: Create Azure Storage Account
