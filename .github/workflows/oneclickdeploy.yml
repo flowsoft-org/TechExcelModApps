@@ -130,22 +130,30 @@ jobs:
         --resource-group $RESOURCE_GROUP --kind OpenAI --sku S0 --location $AZURE_REGION
         AZURE_OPENAI_ENDPOINT=$(az cognitiveservices account show --name $AZURE_OPENAI_SERVICE_NAME --resource-group $RESOURCE_GROUP --query endpoint --output tsv)
         echo "AZURE_OPENAI_ENDPOINT=$AZURE_OPENAI_ENDPOINT" >> $GITHUB_ENV
+        AZURE_OPENAI_API_KEY=$(az cognitiveservices account keys list --name $AZURE_OPENAI_SERVICE_NAME --resource-group $RESOURCE_GROUP --query key1 --output tsv)
+        echo "AZURE_OPENAI_API_KEY=$AZURE_OPENAI_API_KEY" >> $GITHUB_ENV
 
     - name: Deploy ADA Embedding Model
       run: |
         az cognitiveservices account deployment create --resource-group $RESOURCE_GROUP \
         --name $AZURE_OPENAI_SERVICE_NAME --deployment-name $AZURE_OPENAI_DEPLOYMENT_NAME_EMBEDDING \
-        --model-name text-embedding-ada-002 --model-version 2 --model-format OpenAI
-  
+        --model-name text-embedding-ada-002 --model-version 2 --model-format OpenAI \
+        --sku Standard --capacity 50
+    
     - name: Deploy GPT-3.5 Turbo Model
       run: |
         az cognitiveservices account deployment create --resource-group $RESOURCE_GROUP \
         --name $AZURE_OPENAI_SERVICE_NAME --deployment-name $AZURE_OPENAI_DEPLOYMENT_NAME_GPT4 \
-        --model-name gpt-35-turbo --model-version 0125 --model-format OpenAI
+        --model-name gpt-35-turbo --model-version 0125 --model-format OpenAI \
+        --sku Standard --capacity 50
   
     - name: Create Azure AI Search Service
       run: |
         az search service create --name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --sku Basic --location $AZURE_REGION --identity-type SystemAssigned
+        AZURE_AI_SEARCH_ENDPOINT=$(az search service show --name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --query endpoint --output tsv)
+        echo "AZURE_AI_SEARCH_ENDPOINT=$AZURE_AI_SEARCH_ENDPOINT" >> $GITHUB_ENV
+        AZURE_AI_SEARCH_API_KEY=$(az search admin-key show --service-name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --query primaryKey --output tsv)
+        echo "AZURE_AI_SEARCH_API_KEY=$AZURE_AI_SEARCH_API_KEY" >> $GITHUB_ENV
 
     - name: Create Azure AI Search Index
       run: |
@@ -163,13 +171,6 @@ jobs:
           'container': { 'name': '$STORAGE_CONTAINER_NAME' }
         }" --target-index $AZURE_SEARCH_INDEX_NAME
 
-    - name: Deploy front-end container
-      run: |
-        az containerapp create --name frontend --resource-group $RESOURCE_GROUP --environment $CONTAINER_ENV --image $ACR_NAME.azurecr.io/$FRONTEND_IMAGE:v1.0.0 --target-port $FRONTEND_PORT --ingress external --env-vars API_BASEURL=$BACKEND_URL
-
-    - name: Deploy back-end container
-      run: |
-        az containerapp create --name backend --resource-group $RESOURCE_GROUP --environment $CONTAINER_ENV --image $ACR_NAME.azurecr.io/$BACKEND_IMAGE:v1.0.0 --target-port $BACKEND_PORT --ingress external --env-vars POSTGRES_CONNECTION_STRING=$POSTGRES_CONNECTION_STRING
 
     - name: Deploy promptflow container
       run: |
@@ -185,3 +186,17 @@ jobs:
         PGUSER=$POSTGRES_ADMIN_USER \
         PGDATABASE=$POSTGRES_DB_NAME \
         PGPASSWORD=$POSTGRES_ADMIN_PASSWORD
+        CHATBOT_BASEURL="https://$(az containerapp show --resource-group $RESOURCE_GROUP --name promptflow --query properties.configuration.ingress.fqdn -o tsv)"
+        echo "CHATBOT_BASEURL=$CHATBOT_BASEURL" >> $GITHUB_ENV
+
+    - name: Deploy back-end container
+      run: |
+        az containerapp create --name backend --resource-group $RESOURCE_GROUP --environment $CONTAINER_ENV --image $ACR_NAME.azurecr.io/$BACKEND_IMAGE:v1.0.0 --target-port $BACKEND_PORT --ingress external --env-vars POSTGRES_CONNECTION_STRING=$POSTGRES_CONNECTION_STRING CHATBOT_BASEURL=$CHATBOT_BASEURL
+        BACKEND_URL="https://$(az containerapp show --resource-group $RESOURCE_GROUP --name backend --query properties.configuration.ingress.fqdn -o tsv)"
+        echo "BACKEND_URL=$BACKEND_URL" >> $GITHUB_ENV
+
+    - name: Deploy front-end container
+      run: |
+        az containerapp create --name frontend --resource-group $RESOURCE_GROUP --environment $CONTAINER_ENV --image $ACR_NAME.azurecr.io/$FRONTEND_IMAGE:v1.0.0 --target-port $FRONTEND_PORT --ingress external --env-vars API_BASEURL=$BACKEND_URL CHATBOT_BASEURL=$CHATBOT_BASEURL
+
+
