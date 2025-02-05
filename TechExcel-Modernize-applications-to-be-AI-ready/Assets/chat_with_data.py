@@ -6,7 +6,7 @@ import openai
 import dotenv
 
 @tool
-def my_python_tool(question: str, history: str, deployment: str, search_index : str, ai_connection : AzureOpenAIConnection = None, search_connection : CognitiveSearchConnection = None) -> str:
+def my_python_tool(question: str, history: str, deployment: str, ai_connection : AzureOpenAIConnection = None, search_connection : CognitiveSearchConnection = None) -> str:
     dotenv.load_dotenv()
 
     if ai_connection is None:
@@ -19,9 +19,11 @@ def my_python_tool(question: str, history: str, deployment: str, search_index : 
     if search_connection is None:
         search_endpoint = os.environ.get("AZURE_AI_SEARCH_ENDPOINT")
         search_api_key = os.environ.get("AZURE_AI_SEARCH_API_KEY")
+        search_index = os.environ.get("AZURE_AI_SEARCH_INDEX")
     else:
         search_endpoint = search_connection.api_base
         search_api_key = search_connection.api_key
+
 
 
 
