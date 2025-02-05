@@ -43,7 +43,7 @@ nodes:
     deployment: gpt-4o
     history: ${inputs.chat_history}
     question: ${inputs.question}
-    search_index: vector-1737100770012
+    search_index: pdf
   activate:
     when: ${check_question_intent.output}
     is: UNSTRUCTURED
