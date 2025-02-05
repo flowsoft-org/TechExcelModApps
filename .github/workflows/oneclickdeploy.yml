@@ -114,11 +114,9 @@ jobs:
     - name: Create Azure Storage Account
       run: |
         az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP --location $AZURE_REGION --sku Standard_LRS
-        # Get the current user's object ID
-        USER_OBJECT_ID=$(az ad signed-in-user show --query objectId --output tsv)
 
         # Assign the "Storage Blob Data Owner" role to the current user
-        az role assignment create --assignee $USER_OBJECT_ID --role "Storage Blob Data Owner" --scope /subscriptions/$(az account show --query id --output tsv)/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Storage/storageAccounts/$STORAGE_ACCOUNT_NAME
+        az role assignment create --assignee ${{ secrets.AZURE_TECH_EXCEL_AI_CLIENT_ID }} --role "Storage Blob Data Owner" --scope /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Storage/storageAccounts/$STORAGE_ACCOUNT_NAME
 
     - name: Upload PDF files to Azure Storage Container
       run: |
