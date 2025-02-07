@@ -128,7 +128,7 @@ jobs:
         az cognitiveservices account create --name $AZURE_OPENAI_SERVICE_NAME \
         --resource-group $RESOURCE_GROUP --kind OpenAI --sku S0 --location $AZURE_REGION \
         --custom-domain $AZURE_OPENAI_SERVICE_NAME
-        AZURE_OPENAI_ENDPOINT=$(az cognitiveservices account show --name $AZURE_OPENAI_SERVICE_NAME --resource-group $RESOURCE_GROUP --query endpoint --output tsv)
+        AZURE_OPENAI_ENDPOINT=$(az cognitiveservices account show --name $AZURE_OPENAI_SERVICE_NAME --resource-group $RESOURCE_GROUP --query properties.endpoint --output tsv)
         echo "AZURE_OPENAI_ENDPOINT=$AZURE_OPENAI_ENDPOINT" >> $GITHUB_ENV
         AZURE_OPENAI_API_KEY=$(az cognitiveservices account keys list --name $AZURE_OPENAI_SERVICE_NAME --resource-group $RESOURCE_GROUP --query key1 --output tsv)
         echo "AZURE_OPENAI_API_KEY=$AZURE_OPENAI_API_KEY" >> $GITHUB_ENV
@@ -150,8 +150,7 @@ jobs:
     - name: Create Azure AI Search Service
       run: |
         az search service create --name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --sku Standard --location $AZURE_REGION --identity-type SystemAssigned
-        AZURE_AI_SEARCH_ENDPOINT=$(az search service show --name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --query endpoint --output tsv)
-        echo "AZURE_AI_SEARCH_ENDPOINT=$AZURE_AI_SEARCH_ENDPOINT" >> $GITHUB_ENV
+        echo "AZURE_AI_SEARCH_ENDPOINT=https://$AZURE_SEARCH_SERVICE_NAME.search.windows.net" >> $GITHUB_ENV
         AZURE_AI_SEARCH_API_KEY=$(az search admin-key show --service-name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --query primaryKey --output tsv)
         echo "AZURE_AI_SEARCH_API_KEY=$AZURE_AI_SEARCH_API_KEY" >> $GITHUB_ENV
 
