@@ -3,6 +3,16 @@ name: Deploy Contoso Hotel App
 on:
   workflow_dispatch:
 
+env:
+  AZURE_SEARCH_SERVICE_NAME: "fwtechexcelaisrch"
+  AZURE_AI_SEARCH_INDEX: "pdf"
+  STORAGE_ACCOUNT_NAME: "fwtechexcelaistr"
+  STORAGE_CONTAINER_NAME: "brochures"
+  AZURE_OPENAI_SERVICE_NAME: "fwtechexcelaiaoai"
+  AZURE_OPENAI_DEPLOYMENT_NAME_EMBEDDING: "ada-embedding"
+  AZURE_OPENAI_DEPLOYMENT_NAME_GPT4: "gpt4"
+  RESOURCE_GROUP: "rg-techexcelai"
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -13,7 +23,6 @@ jobs:
 
     env:
       AZURE_REGION: "swedencentral"
-      RESOURCE_GROUP: "rg-techexcelai"
       ACR_NAME: "fwtechexcelai"
       CONTAINER_ENV: "fwcontosohotel"
       FRONTEND_IMAGE: "contosohotel-frontend"
@@ -27,13 +36,6 @@ jobs:
       POSTGRES_DB_NAME: "pycontosohotel"
       POSTGRES_ADMIN_USER: "contosoadmin"
       POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
-      AZURE_SEARCH_SERVICE_NAME: "fwtechexcelaisrch"
-      AZURE_AI_SEARCH_INDEX: "pdf"
-      STORAGE_ACCOUNT_NAME: "fwtechexcelaistr"
-      STORAGE_CONTAINER_NAME: "brochures"
-      AZURE_OPENAI_SERVICE_NAME: "fwtechexcelaiaoai"
-      AZURE_OPENAI_DEPLOYMENT_NAME_EMBEDDING: "ada-embedding"
-      AZURE_OPENAI_DEPLOYMENT_NAME_GPT4: "gpt4"
       
     steps:
     - name: Checkout code
@@ -154,23 +156,6 @@ jobs:
         AZURE_AI_SEARCH_API_KEY=$(az search admin-key show --service-name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --query primaryKey --output tsv)
         echo "AZURE_AI_SEARCH_API_KEY=$AZURE_AI_SEARCH_API_KEY" >> $GITHUB_ENV
 
-    # Need to use REST-API
-    # - name: Create Azure AI Search Index
-    #   run: |
-    #     az search index create --service-name $AZURE_SEARCH_SERVICE_NAME --name $AZURE_AI_SEARCH_INDEX --fields "[
-    #       { 'name': 'content', 'type': 'Edm.String', 'searchable': true },
-    #       { 'name': 'metadata_storage_path', 'type': 'Edm.String', 'key': true, 'filterable': true, 'sortable': true }
-    #     ]"
-
-    # - name: Create Azure AI Search Indexer
-    #   run: |
-    #     az search indexer create --service-name $AZURE_SEARCH_SERVICE_NAME --name "pdf-indexer" --data-source "{
-    #       'name': 'pdfs',
-    #       'type': 'azureblob',
-    #       'credentials': { 'connectionString': 'DefaultEndpointsProtocol=https;AccountName=$STORAGE_ACCOUNT_NAME;AccountKey=$(az storage account keys list --resource-group $RESOURCE_GROUP --account-name $STORAGE_ACCOUNT_NAME --query [0].value --output tsv);EndpointSuffix=core.windows.net' },
-    #       'container': { 'name': '$STORAGE_CONTAINER_NAME' }
-    #     }" --target-index $AZURE_AI_SEARCH_INDEX
-
     - name: Deploy Azure Container Environment
       run: |
         az containerapp env create --name $CONTAINER_ENV --resource-group $RESOURCE_GROUP --location $AZURE_REGION
@@ -203,7 +188,7 @@ jobs:
       run: |
         az containerapp create --name frontend --resource-group $RESOURCE_GROUP --environment $CONTAINER_ENV --image $ACR_NAME.azurecr.io/$FRONTEND_IMAGE:v1.0.0 --target-port $FRONTEND_PORT --ingress external --env-vars API_BASEURL=$BACKEND_URL CHATBOT_BASEURL=$CHATBOT_BASEURL
         FRONTEND_URL="https://$(az containerapp show --resource-group $RESOURCE_GROUP --name frontend --query properties.configuration.ingress.fqdn -o tsv)"
-        echo "FRONTEND_URL=$FRONTEND_URL" >> $GITHUB_ENV
+          
 
     - name: Update backend CORS settings
       run: |
@@ -211,3 +196,70 @@ jobs:
          --allowed-origins $FRONTEND_URL --allowed-methods PUT POST
 
 
+  index-data:
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 'Az CLI login'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_TECH_EXCEL_AI_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Retrieve Storage Account Resource ID and Azure OpenAI Endpoint and Key
+        id: storage_account_id
+        run: |
+          AZURE_STORAGE_RESOURCE_ID=$(az storage account show --name ${{ env.STORAGE_ACCOUNT_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query id --output tsv)
+          echo "AZURE_STORAGE_RESOURCE_ID=$AZURE_STORAGE_RESOURCE_ID" >> $GITHUB_ENV
+          AZURE_OPENAI_ENDPOINT=$(az cognitiveservices account show --name $AZURE_OPENAI_SERVICE_NAME --resource-group $RESOURCE_GROUP --query properties.endpoint --output tsv)
+          echo "AZURE_OPENAI_ENDPOINT=$AZURE_OPENAI_ENDPOINT" >> $GITHUB_ENV
+          AZURE_OPENAI_API_KEY=$(az cognitiveservices account keys list --name $AZURE_OPENAI_SERVICE_NAME --resource-group $RESOURCE_GROUP --query key1 --output tsv)
+          echo "AZURE_OPENAI_API_KEY=$AZURE_OPENAI_API_KEY" >> $GITHUB_ENV
+          
+      - name: Create DataSources
+        run: |
+          # Create a datasource for the pdf data
+          curl --request PUT \
+            --verbose \
+            --url 'https://${{ env.AZURE_SEARCH_SERVICE_NAME }}.search.windows.net/datasources(%27configuration%27)?api-version=2024-07-01' \
+            --header "authorization: Bearer $(az account get-access-token --scope https://search.azure.com/.default | jq -r .'accessToken')" \
+            --header 'content-type: application/json' \
+            --header 'user-agent: github-actions' \
+            --data '{"name" : "configuration","type" : "azureblob","credentials" : { "connectionString" : "ResourceId=${{ env.AZURE_STORAGE_RESOURCE_ID }};" },"container" : { "name" : "$STORAGE_CONTAINER_NAME", "query" : "*.pdf" }}'
+
+      - name: Create Indices
+        run: |
+          # Create an index for the pdf data
+          curl --request POST \
+            --verbose \
+            --url 'https://${{ env.AZURE_SEARCH_SERVICE_NAME }}.search.windows.net/indexes?api-version=2024-07-01' \
+            --header "authorization: Bearer $(az account get-access-token --scope https://search.azure.com/.default | jq -r .'accessToken')" \
+            --header 'content-type: application/json' \
+            --header 'user-agent: vscode-restclient' \
+            --data '{"name" : "config-index","fields": [{ "name": "pdf", "type": "Edm.String", "searchable": true, "filterable": false },{ "name": "metadata_storage_name", "type": "Edm.String", "searchable": false, "filterable": true, "sortable": true  },{ "name": "metadata_storage_size", "type": "Edm.Int64", "searchable": false, "filterable": true, "sortable": true  },{ "name": "metadata_storage_content_type", "type": "Edm.String", "searchable": false, "filterable": true, "sortable": true },{ "name": "metadata_storage_file_extension", "type": "Edm.String", "searchable": false, "filterable": true, "sortable": true },{ "name": "metadata_storage_path", "key": true, "type": "Edm.String", "searchable": false }]}'
+
+      - name: Create Indexing Embedding Skill
+        run: |
+          # Create an indexing skill for the pdf data to extract embeddings via Azure OpenAI Service Embeddings model
+          curl --request POST \
+            --verbose \
+            --url 'https://${{ env.AZURE_SEARCH_SERVICE_NAME }}.search.windows.net/indexers/skills?api-version=2024-07-01' \
+            --header "authorization: Bearer $(az account get-access-token --scope https://search.azure.com/.default | jq -r .'accessToken')" \
+            --header 'content-type: application/json' \
+            --header 'user-agent: vscode-restclient' \
+            --data '{"name" : "embedding-skill","description" : "Extract embeddings from text using Azure OpenAI Service","uri" : "${{ env.AZURE_OPENAI_ENDPOINT }}/skills/text-embedding-ada-002/2","httpHeaders" : { "Ocp-Apim-Subscription-Key" : "${{ env.AZURE_OPENAI_API_KEY }}" },"timeout" : "PT30S","batchSize" : 1,"context" : "/document/content","inputs" : [ { "name" : "content","source" : "/document/content" } ],"outputs" : [ { "name" : "embedding","targetName" : "embedding" } ]}'
+
+  
+      - name: Create Indexers
+        run: |
+          # Create an indexer for the pdf data, will directly run once
+          curl --request POST \
+            --verbose \
+            --url 'https://${{ env.AZURE_SEARCH_SERVICE_NAME }}.search.windows.net/indexers?api-version=2024-07-01' \
+            --header "authorization: Bearer $(az account get-access-token --scope https://search.azure.com/.default | jq -r .'accessToken')" \
+            --header 'content-type: application/json' \
+            --header 'user-agent: vscode-restclient' \
+            --data '{"name" : "pdf-indexer","dataSourceName" : "configuration","targetIndexName" : "config-index","parameters": {"batchSize": null,"maxFailedItems": null,"maxFailedItemsPerBatch": null,"configuration": {"indexedFileNameExtensions" : ".pdf","excludedFileNameExtensions" : ".png,.jpeg","dataToExtract": "contentAndMetadata","parsingMode": "default"},"skillsetNames": ["embedding-skill"]},"schedule" : { },"fieldMappings" : [{"sourceFieldName": "metadata_storage_path","targetFieldName": "metadata_storage_path","mappingFunction": {"name": "base64Encode","parameters": null}}]}'
+          

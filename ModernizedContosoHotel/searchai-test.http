@@ -1,0 +1,105 @@
+@endpoint = fwtechexcelaisrch.search.windows.net
+@AZURE_OPENAI_ENDPOINT = https://fwtechexcelaiaoai.openai.azure.com
+@dataSourceName_pdf = pdf
+@storageResourceId = 
+@containerName = brochures
+@indexName = pdf
+### To set token use in same folder
+### echo "AZURE_TOKEN=$(az account get-access-token --scope https://search.azure.com/.default | jq -r .'accessToken')" > .env
+### echo "AZURE_OPENAI_API_KEY=$(az cognitiveservices account keys list --name $AZURE_OPENAI_SERVICE_NAME --resource-group $RESOURCE_GROUP --query key1 --output tsv)" >> .env
+@token = {{$dotenv %AZURE_TOKEN}}
+@AZURE_OPENAI_API_KEY = {{$dotenv %AZURE_OPENAI_API_KEY}}
+
+
+### Create Datasource
+
+PUT https://{{endpoint}}/datasources('{{dataSourceName_pdf}}')?api-version=2024-07-01
+Content-Type: application/json
+Authorization: Bearer {{token}}
+    
+{
+    "name" : "{{dataSourceName_pdf}}",
+    "type" : "azureblob",
+    "credentials" : { "connectionString" : "ResourceId={{storageResourceId}};" },
+    "container" : { "name" : "{{containerName}}", "query" : "*.pdf" }
+}
+
+### Create Index
+POST https://{{endpoint}}/indexes?api-version=2024-07-01
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "name" : "{{indexName}}",
+    "fields": [
+        { "name": "content", "type": "Edm.String", "searchable": true, "filterable": false },
+        { "name": "metadata_storage_name", "type": "Edm.String", "searchable": false, "filterable": true, "sortable": true  },
+        { "name": "metadata_storage_size", "type": "Edm.Int64", "searchable": false, "filterable": true, "sortable": true  },
+        { "name": "metadata_storage_content_type", "type": "Edm.String", "searchable": false, "filterable": true, "sortable": true },
+        { "name": "metadata_storage_file_extension", "type": "Edm.String", "searchable": false, "filterable": true, "sortable": true },
+        { "name": "metadata_storage_path", "key": true, "type": "Edm.String", "searchable": false },
+        { "name": "embedding", "key": true, "type": "Edm.String", "searchable": true }
+    ]
+}
+
+### Create Skillset
+POST https://{{endpoint}}/indexers/skills?api-version=2024-07-01
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "name" : "embedding-skill", 
+    "description" : "Extract embeddings from text using Azure OpenAI Service",
+    "uri" : "{{AZURE_OPENAI_ENDPOINT}}/skills/text-embedding-ada-002/2",
+    "httpHeaders" : 
+    { 
+        "Ocp-Apim-Subscription-Key" : "{{AZURE_OPENAI_API_KEY}}" 
+    },
+    "timeout" : "PT30S", 
+    "batchSize" : 1,
+    "context" : "/document/content",
+    "inputs" : [ { "name" : "p", "source" : "/document/content" } ],
+    "outputs" : [ { "name" : "embedding","targetName" : "embedding" } ],
+    "dependencies": [
+        {
+            "type": "input",
+            "source": "/document/content"
+        }
+    ],
+    "description": "Extract embeddings from the provided content."
+}
+
+
+### Create Indexer
+POST https://{{endpoint}}/indexers?api-version=2024-07-01
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name" : "config-indexer",
+  "dataSourceName" : "{{dataSourceName_pdf}}",
+  "targetIndexName" : "{{indexName}}",
+  "parameters": {
+      "batchSize": null,
+      "maxFailedItems": null,
+      "maxFailedItemsPerBatch": null,
+      "configuration": {
+          "indexedFileNameExtensions" : ".pdf",
+          "excludedFileNameExtensions" : ".png,.jpeg",
+          "dataToExtract": "contentAndMetadata",
+          "parsingMode": "default"
+      }
+  },
+  "schedule" : { },
+  "skillsetNames": ["embedding-skill"],
+  "fieldMappings" : [
+    {
+      "sourceFieldName": "metadata_storage_path",
+      "targetFieldName": "metadata_storage_path",
+      "mappingFunction": {
+        "name": "base64Encode",
+        "parameters": null
+      }
+    }
+  ]
+}
