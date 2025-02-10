@@ -188,7 +188,7 @@ jobs:
       run: |
         az containerapp create --name frontend --resource-group $RESOURCE_GROUP --environment $CONTAINER_ENV --image $ACR_NAME.azurecr.io/$FRONTEND_IMAGE:v1.0.0 --target-port $FRONTEND_PORT --ingress external --env-vars API_BASEURL=$BACKEND_URL CHATBOT_BASEURL=$CHATBOT_BASEURL
         FRONTEND_URL="https://$(az containerapp show --resource-group $RESOURCE_GROUP --name frontend --query properties.configuration.ingress.fqdn -o tsv)"
-          
+        echo "FRONTEND_URL=$FRONTEND_URL" >> $GITHUB_ENV 
 
     - name: Update backend CORS settings
       run: |
