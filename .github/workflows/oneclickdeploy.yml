@@ -35,7 +35,7 @@ jobs:
       FRONTEND_PORT: 8000
       BACKEND_PORT: 8000
       PROMPTFLOW_PORT: 8080
-      
+
       POSTGRES_PORT: 5432
       POSTGRES_SERVER_NAME: "contosohotel-postgres"
       POSTGRES_DB_NAME: "pycontosohotel"
@@ -161,7 +161,10 @@ jobs:
   
     - name: Create Azure AI Search Service
       run: |
-        az search service create --name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --sku Standard --location $AZURE_REGION --identity-type SystemAssigned --auth-options aadOrApiKey
+        az search service create --name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --sku Standard --location $AZURE_REGION \
+          --identity-type SystemAssigned \
+          --auth-options aadOrApiKey \
+          --aad-auth-failure-mode http401WithBearerChallenge
         AZURE_AI_SEARCH_ENDPOINT=$(az search service show --name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --query endpoint --output tsv)
         echo "AZURE_AI_SEARCH_ENDPOINT=$AZURE_AI_SEARCH_ENDPOINT" >> $GITHUB_ENV
         AZURE_AI_SEARCH_API_KEY=$(az search admin-key show --service-name $AZURE_SEARCH_SERVICE_NAME --resource-group $RESOURCE_GROUP --query primaryKey --output tsv)
