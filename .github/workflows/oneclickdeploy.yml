@@ -219,7 +219,8 @@ jobs:
 
     - name: Update backend CORS settings
       run: |
-        az containerapp update --name backend --resource-group $RESOURCE_GROUP --set configuration.ingress.cors.allowedOrigins=$FRONTEND_URL
+        az containerapp ingress cors enable --name backend --resource-group $RESOURCE_GROUP \
+         --allowed-origins $FRONTEND_URL --allowed-methods PUT POST
 
   index-data:
     needs: build-and-deploy
