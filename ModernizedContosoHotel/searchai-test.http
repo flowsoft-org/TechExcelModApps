@@ -1,7 +1,7 @@
 @endpoint = fwtechexcelaisrch.search.windows.net
 @AZURE_OPENAI_ENDPOINT = https://fwtechexcelaiaoai.openai.azure.com
 @dataSourceName_pdf = pdf
-@storageResourceId = 
+@storageResourceId = /subscriptions/1cf7c47a-9984-4a46-9b6d-45dd6e2e4ae3/resourceGroups/rg-techexcelai/providers/Microsoft.Storage/storageAccounts/fwtechexcelaistr
 @containerName = brochures
 @indexName = pdf
 ### To set token use in same folder
@@ -21,7 +21,7 @@ Authorization: Bearer {{token}}
     "name" : "{{dataSourceName_pdf}}",
     "type" : "azureblob",
     "credentials" : { "connectionString" : "ResourceId={{storageResourceId}};" },
-    "container" : { "name" : "{{containerName}}", "query" : "*.pdf" }
+    "container" : { "name" : "{{containerName}}", "query" : null }
 }
 
 ### Create Index
