@@ -1,7 +1,7 @@
 @endpoint = fwtechexcelaisrch.search.windows.net
 @AZURE_OPENAI_ENDPOINT = https://fwtechexcelaiaoai.openai.azure.com
 @dataSourceName_pdf = pdf
-@storageResourceId = /subscriptions/1cf7c47a-9984-4a46-9b6d-45dd6e2e4ae3/resourceGroups/rg-techexcelai/providers/Microsoft.Storage/storageAccounts/fwtechexcelaistr
+@storageResourceId = /subscriptions/<subscription_id>/resourceGroups/rg-techexcelai/providers/Microsoft.Storage/storageAccounts/fwtechexcelaistr
 @containerName = brochures
 @indexName = pdf
 ### To set token use in same folder
@@ -13,16 +13,17 @@
 
 ### Create Datasource
 
-PUT https://{{endpoint}}/datasources('{{dataSourceName_pdf}}')?api-version=2024-07-01
+PUT https://{{endpoint}}/datasources('{{indexName}}-datasource')?api-version=2024-07-01
 Content-Type: application/json
 Authorization: Bearer {{token}}
-    
+  
 {
-    "name" : "{{dataSourceName_pdf}}",
+    "name" : "{{indexName}}-datasource",
     "type" : "azureblob",
     "credentials" : { "connectionString" : "ResourceId={{storageResourceId}};" },
     "container" : { "name" : "{{containerName}}", "query" : null }
 }
+
 
 ### Create Index
 POST https://{{endpoint}}/indexes?api-version=2024-07-01
@@ -30,44 +31,223 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "name" : "{{indexName}}",
-    "fields": [
-        { "name": "content", "type": "Edm.String", "searchable": true, "filterable": false },
-        { "name": "metadata_storage_name", "type": "Edm.String", "searchable": false, "filterable": true, "sortable": true  },
-        { "name": "metadata_storage_size", "type": "Edm.Int64", "searchable": false, "filterable": true, "sortable": true  },
-        { "name": "metadata_storage_content_type", "type": "Edm.String", "searchable": false, "filterable": true, "sortable": true },
-        { "name": "metadata_storage_file_extension", "type": "Edm.String", "searchable": false, "filterable": true, "sortable": true },
-        { "name": "metadata_storage_path", "key": true, "type": "Edm.String", "searchable": false },
-        { "name": "embedding", "key": true, "type": "Edm.String", "searchable": true }
+  "name": "{{indexName}}-index",
+  "fields": [
+    {
+      "name": "chunk_id",
+      "type": "Edm.String",
+      "searchable": true,
+      "filterable": false,
+      "retrievable": true,
+      "stored": true,
+      "sortable": true,
+      "facetable": false,
+      "key": true,
+      "analyzer": "keyword",
+      "synonymMaps": []
+    },
+    {
+      "name": "parent_id",
+      "type": "Edm.String",
+      "searchable": false,
+      "filterable": true,
+      "retrievable": true,
+      "stored": true,
+      "sortable": false,
+      "facetable": false,
+      "key": false,
+      "synonymMaps": []
+    },
+    {
+      "name": "chunk",
+      "type": "Edm.String",
+      "searchable": true,
+      "filterable": false,
+      "retrievable": true,
+      "stored": true,
+      "sortable": false,
+      "facetable": false,
+      "key": false,
+      "synonymMaps": []
+    },
+    {
+      "name": "title",
+      "type": "Edm.String",
+      "searchable": true,
+      "filterable": false,
+      "retrievable": true,
+      "stored": true,
+      "sortable": false,
+      "facetable": false,
+      "key": false,
+      "synonymMaps": []
+    },
+    {
+      "name": "text_vector",
+      "type": "Collection(Edm.Single)",
+      "searchable": true,
+      "filterable": false,
+      "retrievable": true,
+      "stored": true,
+      "sortable": false,
+      "facetable": false,
+      "key": false,
+      "dimensions": 1536,
+      "vectorSearchProfile": "{{indexName}}-azureOpenAi-text-profile",
+      "synonymMaps": []
+    }
+  ],
+  "scoringProfiles": [],
+  "suggesters": [],
+  "analyzers": [],
+  "tokenizers": [],
+  "tokenFilters": [],
+  "charFilters": [],
+  "similarity": {
+    "@odata.type": "#Microsoft.Azure.Search.BM25Similarity"
+  },
+  "semantic": {
+    "defaultConfiguration": "{{indexName}}-semantic-configuration",
+    "configurations": [
+      {
+        "name": "{{indexName}}-semantic-configuration",
+        "prioritizedFields": {
+          "titleField": {
+            "fieldName": "title"
+          },
+          "prioritizedContentFields": [
+            {
+              "fieldName": "chunk"
+            }
+          ],
+          "prioritizedKeywordsFields": []
+        }
+      }
     ]
+  },
+  "vectorSearch": {
+    "algorithms": [
+      {
+        "name": "{{indexName}}-algorithm",
+        "kind": "hnsw",
+        "hnswParameters": {
+          "metric": "cosine",
+          "m": 4,
+          "efConstruction": 400,
+          "efSearch": 500
+        }
+      }
+    ],
+    "profiles": [
+      {
+        "name": "{{indexName}}-azureOpenAi-text-profile",
+        "algorithm": "{{indexName}}-algorithm",
+        "vectorizer": "{{indexName}}-azureOpenAi-text-vectorizer"
+      }
+    ],
+    "vectorizers": [
+      {
+        "name": "{{indexName}}-azureOpenAi-text-vectorizer",
+        "kind": "azureOpenAI",
+        "azureOpenAIParameters": {
+          "resourceUri": "{{AZURE_OPENAI_ENDPOINT}}",
+          "deploymentId": "ada-embedding",
+          "modelName": "text-embedding-ada-002"
+        }
+      }
+    ],
+    "compressions": []
+  }
 }
 
 ### Create Skillset
-POST https://{{endpoint}}/indexers/skills?api-version=2024-07-01
+POST https://{{endpoint}}//skillsets?api-version=2024-07-01
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "name" : "embedding-skill", 
-    "description" : "Extract embeddings from text using Azure OpenAI Service",
-    "uri" : "{{AZURE_OPENAI_ENDPOINT}}/skills/text-embedding-ada-002/2",
-    "httpHeaders" : 
-    { 
-        "Ocp-Apim-Subscription-Key" : "{{AZURE_OPENAI_API_KEY}}" 
-    },
-    "timeout" : "PT30S", 
-    "batchSize" : 1,
-    "context" : "/document/content",
-    "inputs" : [ { "name" : "p", "source" : "/document/content" } ],
-    "outputs" : [ { "name" : "embedding","targetName" : "embedding" } ],
-    "dependencies": [
+  "name": "{{indexName}}-skillset",
+  "description": "Skillset to chunk documents and generate embeddings",
+  "skills": [
+    {
+      "@odata.type": "#Microsoft.Skills.Text.SplitSkill",
+      "name": "#1",
+      "description": "Split skill to chunk documents",
+      "context": "/document",
+      "defaultLanguageCode": "en",
+      "textSplitMode": "pages",
+      "maximumPageLength": 2000,
+      "pageOverlapLength": 500,
+      "maximumPagesToTake": 0,
+      "inputs": [
         {
-            "type": "input",
-            "source": "/document/content"
+          "name": "text",
+          "source": "/document/content",
+          "inputs": []
         }
+      ],
+      "outputs": [
+        {
+          "name": "textItems",
+          "targetName": "pages"
+        }
+      ]
+    },
+    {
+      "@odata.type": "#Microsoft.Skills.Text.AzureOpenAIEmbeddingSkill",
+      "name": "#2",
+      "context": "/document/pages/*",
+      "resourceUri": "{{AZURE_OPENAI_ENDPOINT}}",
+      "deploymentId": "ada-embedding",
+      "dimensions": 1536,
+      "modelName": "text-embedding-ada-002",
+      "inputs": [
+        {
+          "name": "text",
+          "source": "/document/pages/*",
+          "inputs": []
+        }
+      ],
+      "outputs": [
+        {
+          "name": "embedding",
+          "targetName": "text_vector"
+        }
+      ]
+    }
+  ],
+  "indexProjections": {
+    "selectors": [
+      {
+        "targetIndexName": "{{indexName}}-index",
+        "parentKeyFieldName": "parent_id",
+        "sourceContext": "/document/pages/*",
+        "mappings": [
+          {
+            "name": "text_vector",
+            "source": "/document/pages/*/text_vector",
+            "inputs": []
+          },
+          {
+            "name": "chunk",
+            "source": "/document/pages/*",
+            "inputs": []
+          },
+          {
+            "name": "title",
+            "source": "/document/title",
+            "inputs": []
+          }
+        ]
+      }
     ],
-    "description": "Extract embeddings from the provided content."
+    "parameters": {
+      "projectionMode": "skipIndexingParentDocuments"
+    }
+  }
 }
+
+
 
 
 ### Create Indexer
@@ -76,30 +256,30 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-  "name" : "config-indexer",
-  "dataSourceName" : "{{dataSourceName_pdf}}",
-  "targetIndexName" : "{{indexName}}",
+  "name": "{{indexName}}-indexer",
+  "description": null,
+  "dataSourceName": "{{indexName}}-datasource",
+  "skillsetName": "{{indexName}}-skillset",
+  "targetIndexName": "{{indexName}}-index",
+  "disabled": null,
+  "schedule": null,
   "parameters": {
-      "batchSize": null,
-      "maxFailedItems": null,
-      "maxFailedItemsPerBatch": null,
-      "configuration": {
-          "indexedFileNameExtensions" : ".pdf",
-          "excludedFileNameExtensions" : ".png,.jpeg",
-          "dataToExtract": "contentAndMetadata",
-          "parsingMode": "default"
-      }
-  },
-  "schedule" : { },
-  "skillsetNames": ["embedding-skill"],
-  "fieldMappings" : [
-    {
-      "sourceFieldName": "metadata_storage_path",
-      "targetFieldName": "metadata_storage_path",
-      "mappingFunction": {
-        "name": "base64Encode",
-        "parameters": null
-      }
+    "batchSize": null,
+    "maxFailedItems": null,
+    "maxFailedItemsPerBatch": null,
+    "base64EncodeKeys": null,
+    "configuration": {
+      "dataToExtract": "contentAndMetadata",
+      "parsingMode": "default"
     }
-  ]
+  },
+  "fieldMappings": [
+    {
+      "sourceFieldName": "metadata_storage_name",
+      "targetFieldName": "title",
+      "mappingFunction": null
+    }
+  ],
+  "outputFieldMappings": [],
+  "encryptionKey": null
 }
