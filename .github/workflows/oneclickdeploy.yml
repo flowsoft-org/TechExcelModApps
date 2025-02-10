@@ -244,20 +244,17 @@ jobs:
           echo "AZURE_STORAGE_RESOURCE_ID=$AZURE_STORAGE_RESOURCE_ID" >> $GITHUB_ENV
           AZURE_OPENAI_ENDPOINT=$(az cognitiveservices account show --name $AZURE_OPENAI_SERVICE_NAME --resource-group $RESOURCE_GROUP --query properties.endpoint --output tsv)
           echo "AZURE_OPENAI_ENDPOINT=$AZURE_OPENAI_ENDPOINT" >> $GITHUB_ENV
-          AZURE_OPENAI_API_KEY=$(az cognitiveservices account keys list --name $AZURE_OPENAI_SERVICE_NAME --resource-group $RESOURCE_GROUP --query key1 --output tsv)
-          echo "AZURE_OPENAI_API_KEY=$AZURE_OPENAI_API_KEY" >> $GITHUB_ENV
           
       - name: Create DataSources
         run: |
           # Create a datasource for the pdf data
           curl --request PUT \
-            --verbose \
-            --url 'https://${{ env.AZURE_SEARCH_SERVICE_NAME }}.search.windows.net/datasources(%27configuration%27)?api-version=2024-07-01' \
+            --url 'https://${{ env.AZURE_SEARCH_SERVICE_NAME }}.search.windows.net/datasources(%27pdf-datasource%27)?api-version=2024-07-01' \
             --header "authorization: Bearer $(az account get-access-token --scope https://search.azure.com/.default | jq -r .'accessToken')" \
             --header 'content-type: application/json' \
             --header 'user-agent: github-actions' \
-            --data '{"name" : "configuration","type" : "azureblob","credentials" : { "connectionString" : "ResourceId=${{ env.AZURE_STORAGE_RESOURCE_ID }};" },"container" : { "name" : "$STORAGE_CONTAINER_NAME", "query" : "*.pdf" }}'
-
+            --data '{"name" : "pdf-datasource","type" : "azureblob","credentials" : { "connectionString" : "ResourceId=$AZURE_STORAGE_RESOURCE_ID;" },"container" : { "name" : "brochures", "query" : null }}'
+          
       - name: Create Indices
         run: |
           # Create an index for the pdf data
@@ -266,20 +263,19 @@ jobs:
             --url 'https://${{ env.AZURE_SEARCH_SERVICE_NAME }}.search.windows.net/indexes?api-version=2024-07-01' \
             --header "authorization: Bearer $(az account get-access-token --scope https://search.azure.com/.default | jq -r .'accessToken')" \
             --header 'content-type: application/json' \
-            --header 'user-agent: vscode-restclient' \
-            --data '{"name" : "config-index","fields": [{ "name": "pdf", "type": "Edm.String", "searchable": true, "filterable": false },{ "name": "metadata_storage_name", "type": "Edm.String", "searchable": false, "filterable": true, "sortable": true  },{ "name": "metadata_storage_size", "type": "Edm.Int64", "searchable": false, "filterable": true, "sortable": true  },{ "name": "metadata_storage_content_type", "type": "Edm.String", "searchable": false, "filterable": true, "sortable": true },{ "name": "metadata_storage_file_extension", "type": "Edm.String", "searchable": false, "filterable": true, "sortable": true },{ "name": "metadata_storage_path", "key": true, "type": "Edm.String", "searchable": false }]}'
+            --header 'user-agent: github-actions' \
+            --data '{"name": "pdf-index","fields": [{"name": "chunk_id","type": "Edm.String","searchable": true,"filterable": false,"retrievable": true,"stored": true,"sortable": true,"facetable": false,"key": true,"analyzer": "keyword","synonymMaps": []},{"name": "parent_id","type": "Edm.String","searchable": false,"filterable": true,"retrievable": true,"stored": true,"sortable": false,"facetable": false,"key": false,"synonymMaps": []},{"name": "chunk","type": "Edm.String","searchable": true,"filterable": false,"retrievable": true,"stored": true,"sortable": false,"facetable": false,"key": false,"synonymMaps": []},{"name": "title","type": "Edm.String","searchable": true,"filterable": false,"retrievable": true,"stored": true,"sortable": false,"facetable": false,"key": false,"synonymMaps": []},{"name": "text_vector","type": "Collection(Edm.Single)","searchable": true,"filterable": false,"retrievable": true,"stored": true,"sortable": false,"facetable": false,"key": false,"dimensions": 1536,"vectorSearchProfile": "pdf-azureOpenAi-text-profile","synonymMaps": []}],"scoringProfiles": [],"suggesters": [],"analyzers": [],"tokenizers": [],"tokenFilters": [],"charFilters": [],"similarity": {"@odata.type": "#Microsoft.Azure.Search.BM25Similarity"},"semantic": {"defaultConfiguration": "pdf-semantic-configuration","configurations": [{"name": "pdf-semantic-configuration","prioritizedFields": {"titleField": {"fieldName": "title"},"prioritizedContentFields": [{"fieldName": "chunk"}],"prioritizedKeywordsFields": []}}]},"vectorSearch": {"algorithms": [{"name": "pdf-algorithm","kind": "hnsw","hnswParameters": {"metric": "cosine","m": 4,"efConstruction": 400,"efSearch": 500}}],"profiles": [{"name": "pdf-azureOpenAi-text-profile","algorithm": "pdf-algorithm","vectorizer": "pdf-azureOpenAi-text-vectorizer"}],"vectorizers": [{"name": "pdf-azureOpenAi-text-vectorizer","kind": "azureOpenAI","azureOpenAIParameters": {"resourceUri": "$AZURE_OPENAI_ENDPOINT","deploymentId": "ada-embedding","modelName": "text-embedding-ada-002"}}],"compressions": []}}'
 
       - name: Create Indexing Embedding Skill
         run: |
           # Create an indexing skill for the pdf data to extract embeddings via Azure OpenAI Service Embeddings model
           curl --request POST \
             --verbose \
-            --url 'https://${{ env.AZURE_SEARCH_SERVICE_NAME }}.search.windows.net/indexers/skills?api-version=2024-07-01' \
+            --url 'https://${{ env.AZURE_SEARCH_SERVICE_NAME }}.search.windows.net/skillsets?api-version=2024-07-01' \
             --header "authorization: Bearer $(az account get-access-token --scope https://search.azure.com/.default | jq -r .'accessToken')" \
             --header 'content-type: application/json' \
-            --header 'user-agent: vscode-restclient' \
-            --data '{"name" : "embedding-skill","description" : "Extract embeddings from text using Azure OpenAI Service","uri" : "${{ env.AZURE_OPENAI_ENDPOINT }}/skills/text-embedding-ada-002/2","httpHeaders" : { "Ocp-Apim-Subscription-Key" : "${{ env.AZURE_OPENAI_API_KEY }}" },"timeout" : "PT30S","batchSize" : 1,"context" : "/document/content","inputs" : [ { "name" : "content","source" : "/document/content" } ],"outputs" : [ { "name" : "embedding","targetName" : "embedding" } ]}'
-
+            --header 'user-agent: github-actions' \
+            --data '{"name": "pdf-skillset","description": "Skillset to chunk documents and generate embeddings","skills": [{"@odata.type": "#Microsoft.Skills.Text.SplitSkill","name": "#1","description": "Split skill to chunk documents","context": "/document","defaultLanguageCode": "en","textSplitMode": "pages","maximumPageLength": 2000,"pageOverlapLength": 500,"maximumPagesToTake": 0,"inputs": [{"name": "text","source": "/document/content","inputs": []}],"outputs": [{"name": "textItems","targetName": "pages"}]},{"@odata.type": "#Microsoft.Skills.Text.AzureOpenAIEmbeddingSkill","name": "#2","context": "/document/pages/*","resourceUri": "$AZURE_OPENAI_ENDPOINT","deploymentId": "ada-embedding","dimensions": 1536,"modelName": "text-embedding-ada-002","inputs": [{"name": "text","source": "/document/pages/*","inputs": []}],"outputs": [{"name": "embedding","targetName": "text_vector"}]}],"indexProjections": {"selectors": [{"targetIndexName": "pdf-index","parentKeyFieldName": "parent_id","sourceContext": "/document/pages/*","mappings": [{"name": "text_vector","source": "/document/pages/*/text_vector","inputs": []},{"name": "chunk","source": "/document/pages/*","inputs": []},{"name": "title","source": "/document/title","inputs": []}]}],"parameters": {"projectionMode": "skipIndexingParentDocuments"}}}'
   
       - name: Create Indexers
         run: |
@@ -289,6 +285,5 @@ jobs:
             --url 'https://${{ env.AZURE_SEARCH_SERVICE_NAME }}.search.windows.net/indexers?api-version=2024-07-01' \
             --header "authorization: Bearer $(az account get-access-token --scope https://search.azure.com/.default | jq -r .'accessToken')" \
             --header 'content-type: application/json' \
-            --header 'user-agent: vscode-restclient' \
-            --data '{"name" : "pdf-indexer","dataSourceName" : "configuration","targetIndexName" : "config-index","parameters": {"batchSize": null,"maxFailedItems": null,"maxFailedItemsPerBatch": null,"configuration": {"indexedFileNameExtensions" : ".pdf","excludedFileNameExtensions" : ".png,.jpeg","dataToExtract": "contentAndMetadata","parsingMode": "default"},"skillsetNames": ["embedding-skill"]},"schedule" : { },"fieldMappings" : [{"sourceFieldName": "metadata_storage_path","targetFieldName": "metadata_storage_path","mappingFunction": {"name": "base64Encode","parameters": null}}]}'
-
+            --header 'user-agent: github-actions' \
+            --data '{"name": "pdf-indexer","description": null,"dataSourceName": "pdf-datasource","skillsetName": "pdf-skillset","targetIndexName": "pdf-index","disabled": null,"schedule": null,"parameters": {"batchSize": null,"maxFailedItems": null,"maxFailedItemsPerBatch": null,"base64EncodeKeys": null,"configuration": {"dataToExtract": "contentAndMetadata","parsingMode": "default"}},"fieldMappings": [{"sourceFieldName": "metadata_storage_name","targetFieldName": "title","mappingFunction": null}],"outputFieldMappings": [],"encryptionKey": null}'
