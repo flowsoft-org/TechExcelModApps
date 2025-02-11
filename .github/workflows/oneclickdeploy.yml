@@ -125,16 +125,6 @@ jobs:
         # Assign the "Storage Blob Data Owner" role to the current user
         az role assignment create --assignee-object-id ${{ secrets.AZURE_TECH_EXCEL_AI_OBJECT_ID }} --assignee-principal-type ServicePrincipal --role "Storage Blob Data Owner" --scope /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Storage/storageAccounts/$STORAGE_ACCOUNT_NAME
 
-    - name: Upload PDF files to Azure Storage Container
-      run: |
-        az storage container create --name $STORAGE_CONTAINER_NAME --account-name $STORAGE_ACCOUNT_NAME --auth-mode login
-        for i in {1..5}; do
-          echo "Attempt $i to upload PDFs..."
-          az storage blob upload-batch --account-name $STORAGE_ACCOUNT_NAME --destination $STORAGE_CONTAINER_NAME --source "TechExcel-Modernize-applications-to-be-AI-ready/Assets/PDFs" --pattern "*.pdf" --auth-mode login && break
-          echo "Upload failed, waiting 10 seconds before retry..."
-          sleep 10
-        done
-
     - name: Create Azure OpenAI Service
       run: |
         az cognitiveservices account create --name $AZURE_OPENAI_SERVICE_NAME \
@@ -158,6 +148,11 @@ jobs:
         --name $AZURE_OPENAI_SERVICE_NAME --deployment-name $AZURE_OPENAI_DEPLOYMENT_NAME_GPT4 \
         --model-name gpt-35-turbo --model-version 0125 --model-format OpenAI \
         --sku Standard --capacity 50
+
+    - name: Upload PDF files to Azure Storage Container
+      run: |
+        az storage container create --name $STORAGE_CONTAINER_NAME --account-name $STORAGE_ACCOUNT_NAME --auth-mode login
+        az storage blob upload-batch --account-name $STORAGE_ACCOUNT_NAME --destination $STORAGE_CONTAINER_NAME --source "TechExcel-Modernize-applications-to-be-AI-ready/Assets/PDFs" --pattern "*.pdf" --auth-mode login && break
   
     - name: Create Azure AI Search Service
       run: |
