@@ -146,7 +146,7 @@ jobs:
       run: |
         az cognitiveservices account deployment create --resource-group $RESOURCE_GROUP \
         --name $AZURE_OPENAI_SERVICE_NAME --deployment-name $AZURE_OPENAI_DEPLOYMENT_NAME_GPT4 \
-        --model-name gpt-4o --model-version 2024-11-20 --model-format OpenAI \
+        --model-name gpt-4o --model-version 2024-08-06 --model-format OpenAI \
         --sku Standard --capacity 50
 
     - name: Upload PDF files to Azure Storage Container
