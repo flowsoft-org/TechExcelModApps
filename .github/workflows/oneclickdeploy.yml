@@ -8,7 +8,7 @@ env:
   RESOURCE_GROUP: "rg-techexcelai"
 
   AZURE_SEARCH_SERVICE_NAME: "fwtechexcelaisrch"
-  AZURE_AI_SEARCH_INDEX: "pdf"
+  AZURE_AI_SEARCH_INDEX: "pdf-index"
   
   STORAGE_ACCOUNT_NAME: "fwtechexcelaistr"
   STORAGE_CONTAINER_NAME: "brochures"
